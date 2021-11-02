@@ -12,9 +12,11 @@ class Tile extends StatelessWidget {
     return Container(
       width: GameState.tileSize,
       height: GameState.tileSize,
-      child: CustomPaint(
-        painter: TilePainter(number: number),
-      ),
+      child: number == 0
+          ? ColoredBox(color: Colors.red)
+          : CustomPaint(
+              painter: TilePainter(number: number),
+            ),
     );
   }
 }

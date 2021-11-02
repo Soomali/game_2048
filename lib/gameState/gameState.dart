@@ -33,15 +33,16 @@ class GameState with ChangeNotifier {
   Move? lastMove;
   final int height;
   final int width;
-  bool inProgress = false;
+  bool _inProgress = false;
   GameCondition condition = GameCondition.ongoing;
   GameState({required this.width, required this.height})
       : board = List.generate(height,
             (_) => List.generate(width, (_) => TileData(0), growable: false),
             growable: false) {
     _setRandomStart();
-    print(board);
+    _printAsNum();
   }
+  void printBoard() => _printAsNum();
   void reset() {
     for (var i = 0; i < height; i++) {
       for (var j = 0; j < width; j++) {
@@ -75,12 +76,16 @@ class GameState with ChangeNotifier {
     board = values.map((e) => e.map((f) => TileData(f)).toList()).toList();
   }
 
+  void _printAsNum({bool usebf = false}) => print((usebf ? boardBefore : board)
+      .map((e) => e.map((f) => f.number).toList())
+      .toList());
+
   /// handles the movement then
   /// determines whether the game is won,lost or ongoing by updating the [condition],
   /// if the game [condition] is ongoing replaces a zero with a 2 or 4 randomly.
   /// notifies all the listeners after these events.
   void handleMovement(Move move, {bool debug = false}) {
-    if (!debug && inProgress) return;
+    if (!debug && _inProgress) return;
     boardBefore = List.from(board);
     switch (move) {
       case Move.right:
@@ -100,37 +105,47 @@ class GameState with ChangeNotifier {
         _moveDown();
         break;
     }
+
     lastMove = move;
     if (!debug) {
       _updateState();
       if (condition == GameCondition.ongoing) {
         _addRandomNumber();
       }
-
       notifyListeners();
     }
   }
+
+  /*
+  af:[[2, 0, 0, 2], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+  bf: [[0, 0, 0, 2], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+   */
 
   void _moveRight() {
     for (var i = height - 1; i >= 0; i--) {
       for (var j = width - 1; j > 0; j--) {
         final current = board[i][j];
         var next = board[i][j - 1];
-        if (current.number == 0) {
-          int? lim;
-          for (var k = j; k >= 0; k--) {
+        if (current.number == 0 || current.hasMoved) {
+          int lim = j;
+          for (var k = j - 1; k >= 0; k--) {
             next = board[i][k];
-            if (next.number != 0) {
+            if (next.number != 0 && !(next.hasMoved || next.hasChanged)) {
               lim = k;
               break;
             }
           }
-          if (lim != null) {
-            board[i][j] = next;
-            board[i][lim].moveTo(Move.right, lim - j);
+          if (next.number != 0) {
+            if (current.hasMoved) {
+              board[i][j].awaiting = next.number;
+              board[i][lim].moveTo(Move.right, lim - j);
+            } else if (!next.hasMoved && !next.hasChanged) {
+              board[i][j].number = next.number;
+              board[i][lim].moveTo(Move.right, lim - j);
+            }
           }
-        } else if (current.number == next.number) {
-          board[i][j] += board[i][j - 1];
+        } else if (current.number == next.number && !next.hasMoved) {
+          board[i][j].number += next.number;
           board[i][j - 1].moveTo(Move.right, 1);
         }
       }
@@ -142,21 +157,27 @@ class GameState with ChangeNotifier {
       for (var i = height - 1; i > 0; i--) {
         final current = board[i][j];
         var next = board[i - 1][j];
-        if (current.number == 0) {
-          int? lim;
-          for (var k = i; k >= 0; k--) {
+
+        if (current.number == 0 || current.hasMoved) {
+          int lim = i;
+          for (var k = i - 1; k >= 0; k--) {
             next = board[k][j];
-            if (next.number != 0) {
+            if (next.number != 0 && !(next.hasMoved || next.hasChanged)) {
               lim = k;
               break;
             }
           }
-          if (lim != null) {
-            board[i][j] += next;
-            board[lim][j].moveTo(Move.down, lim - i);
+          if (next.number != 0) {
+            if (current.hasMoved) {
+              board[i][j].awaiting = next.number;
+              board[lim][j].moveTo(Move.down, lim - i);
+            } else if (!next.hasMoved && !next.hasChanged) {
+              board[i][j].number = next.number;
+              board[lim][j].moveTo(Move.down, lim - i);
+            }
           }
-        } else if (current.number == next.number) {
-          board[i][j] += board[i - 1][j];
+        } else if (current.number == next.number && !next.hasMoved) {
+          board[i][j].number += next.number;
           board[i - 1][j].moveTo(Move.down, 1);
         }
       }
@@ -168,21 +189,27 @@ class GameState with ChangeNotifier {
       for (var i = 0; i < height - 1; i++) {
         final current = board[i][j];
         var next = board[i + 1][j];
-        if (current.number == 0) {
-          int? lim;
-          for (var k = i; k < height; k++) {
+
+        if (current.number == 0 || current.hasMoved) {
+          int lim = i;
+          for (var k = i + 1; k < height; k++) {
             next = board[k][j];
-            if (next.number != 0) {
+            if (next.number != 0 && !(next.hasMoved || next.hasChanged)) {
               lim = k;
               break;
             }
           }
-          if (lim != null) {
-            board[i][j] += next;
-            board[lim][j].moveTo(Move.up, lim - i);
+          if (next.number != 0) {
+            if (current.hasMoved) {
+              board[i][j].awaiting = next.number;
+              board[lim][j].moveTo(Move.up, lim - i);
+            } else if (!next.hasMoved && !next.hasChanged) {
+              board[i][j].number = next.number;
+              board[lim][j].moveTo(Move.up, lim - i);
+            }
           }
-        } else if (current == next) {
-          board[i][j] += board[i + 1][j];
+        } else if (current.number == next.number && !next.hasMoved) {
+          board[i][j].number += next.number;
           board[i + 1][j].moveTo(Move.up, 1);
         }
       }
@@ -203,21 +230,27 @@ class GameState with ChangeNotifier {
       for (var j = 0; j < width - 1; j++) {
         final current = board[i][j];
         var next = board[i][j + 1];
-        if (current.number == 0) {
-          int? lim;
-          for (var k = j; k < width; k++) {
+
+        if (current.number == 0 || current.hasMoved) {
+          int lim = j;
+          for (var k = j + 1; k < width; k++) {
             next = board[i][k];
-            if (next.number != 0) {
+            if (next.number != 0 && !(next.hasMoved || next.hasChanged)) {
               lim = k;
               break;
             }
           }
-          if (lim != null) {
-            board[i][j] += next;
-            board[i][lim].moveTo(Move.left, lim - j);
+          if (next.number != 0) {
+            if (current.hasMoved) {
+              board[i][j].awaiting = next.number;
+              board[i][lim].moveTo(Move.left, lim - j);
+            } else if (!next.hasMoved && !next.hasChanged) {
+              board[i][j].number = next.number;
+              board[i][lim].moveTo(Move.left, lim - j);
+            }
           }
-        } else if (current == next) {
-          board[i][j] += board[i][j + 1];
+        } else if (current.number == next.number && !next.hasMoved) {
+          board[i][j].number += next.number;
           board[i][j + 1].moveTo(Move.left, 1);
         }
       }
@@ -260,10 +293,10 @@ class GameState with ChangeNotifier {
 
     for (var i in board) {
       for (var j in i) {
-        if (j == 2048) {
+        if (j.number == 2048) {
           condition = GameCondition.won;
           return;
-        } else if (j == 0) {
+        } else if (j.number == 0) {
           hasZero = true;
         }
       }
@@ -287,13 +320,22 @@ class GameState with ChangeNotifier {
         notifyListeners();
         break;
       }
-    } while (board[h][w] != 0);
-    print('added 2 to [$h][$w]');
+    } while ((board[h][w].number != 0 || board[h][w].awaiting != 0) ||
+        !(board[h][w].number == 0 && board[h][w].awaiting != 0));
+    print(
+        'added 2 to [$h][$w] after the move of $lastMove instead of the value ${board[h][w]}');
 
-    Future.delayed(Duration(milliseconds: 100), () {
-      board[h][w] = TileData(2 * (1 + Random().nextInt(1)));
-      inProgress = false;
+    Future.delayed(Duration(milliseconds: 80), () {
+      board[h][w] = TileData(2 * (1 + Random().nextInt(2)));
+      _inProgress = false;
       notifyListeners();
     });
   }
+}
+
+class Pair<V, T> {
+  final V first;
+  final T second;
+
+  Pair(this.first, this.second);
 }

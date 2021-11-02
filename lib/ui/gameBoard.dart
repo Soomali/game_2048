@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:game_2048/gameState/tileData.dart';
 import 'package:game_2048/ui/tile.dart';
 import 'package:provider/provider.dart';
 import 'package:game_2048/gameState/gameState.dart';
@@ -84,7 +85,7 @@ class BoardWidget extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(border: Border.all(width: 2)),
         child: BoardBuilder(
-            width: state.width, height: state.height, board: state.board),
+            width: state.width, height: state.height, state: state),
       ),
       IconButton(onPressed: () => state.reset(), icon: Icon(Icons.restore)),
     ]);
@@ -94,35 +95,70 @@ class BoardWidget extends StatelessWidget {
 class BoardBuilder extends StatelessWidget {
   final int width;
   final int height;
-  final Board board;
+  final GameState state;
   final Move? move;
   const BoardBuilder({
     Key? key,
     required this.width,
     required this.height,
-    required this.board,
+    required this.state,
     this.move,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: List.generate(
-          height,
-          (h) => Row(
-                  children: List.generate(width, (w) {
-                final number = board[h][w];
-                return number == 0
-                    ? Container(
-                        width: 50,
-                        height: 50,
-                        color: Colors.red,
-                      )
-                    : Tile(
-                        number: number.number,
-                      );
-              }))),
-    );
+    state.printBoard();
+    final _childrenData = _createChildren(state.width, state.height);
+    return Container(
+        color: Colors.red,
+        child: Stack(
+            children: _childrenData
+                .map((e) => e.number == 0
+                    ? Container()
+                    : TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: 15),
+                        duration: Duration(milliseconds: 150),
+                        child: Tile(
+                          number: e.number,
+                        ),
+                        builder: (context, pos, child) {
+                          e.performMove();
+                          return AnimatedPositioned(
+                              left: pos < 1 ? e.start.dx : e.end.dx,
+                              top: pos < 1 ? e.start.dy : e.end.dy,
+                              child: child!,
+                              duration: Duration(milliseconds: 50));
+                        },
+                      ))
+                .toList()));
+  }
+
+  List<TileData> _createChildren(int width, int height) {
+    final data = _boardAsOneDim();
+    var c = 0;
+    for (var i = 0; i < data.length; i++) {
+      final e = data[i];
+      if (e.number != 0) {
+        c++;
+      }
+      final h = i ~/ width;
+      final w = i % width;
+      final begin = Offset(
+          w.toDouble() * GameState.tileSize, h.toDouble() * GameState.tileSize);
+      final end = begin + e.movedOffset;
+      e.end = end;
+      e.start = begin;
+    }
+    print('we have $c non zero tiles.');
+    return data;
+  }
+
+  List<TileData> _boardAsOneDim() {
+    final res = <TileData>[];
+    for (var i in state.board) {
+      res.addAll(i);
+    }
+    return res;
   }
 }
 
